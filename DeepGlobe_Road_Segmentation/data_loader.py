@@ -89,7 +89,7 @@ def randomRotate90(image, mask, u=0.5):
 class DeepGlobeRoadExtract(data.Dataset):
     def __init__(self, mode='train'):
         super().__init__()
-        root_path = f'/home/xdzhang/project/semantic_segmentation/deep_globe_road_extraction/dataset/{mode}'
+        root_path = f'./dataset/{mode}'
         self.img_paths = glob(os.path.join(root_path, '*sat.jpg'))
         
     def __getitem__(self, index):
