@@ -89,8 +89,17 @@ def randomRotate90(image, mask, u=0.5):
 class DeepGlobeRoadExtract(data.Dataset):
     def __init__(self, mode='train'):
         super().__init__()
-        root_path = f'./dataset/{mode}'
+        root_path = './dataset/train'
         self.img_paths = glob(os.path.join(root_path, '*sat.jpg'))
+        self.img_paths = sorted(self.img_paths, key=lambda x: float(x.split('/')[-1][:-8]))
+        dataset_size = len(self.img_paths)
+        if mode == 'train':
+            self.img_paths = self.img_paths[:round(dataset_size * 0.8)]
+        elif mode == 'valid':
+            self.img_paths = self.img_paths[round(dataset_size * 0.8):round(dataset_size * 0.8) + round(dataset_size * 0.1)]
+        else:
+            self.img_paths = self.img_paths[round(dataset_size * 0.1):]
+
         
     def __getitem__(self, index):
         img_path = self.img_paths[index]
@@ -121,6 +130,8 @@ class DeepGlobeRoadExtract(data.Dataset):
         # normalization
         img = img.astype(np.float32) / 255.0 * 3.2 - 1.6
         mask = mask.astype(np.float32) / 255.0
+        mask[mask > 0.5] = 1
+        mask[mask <= 0.5] = 0
 
         img = torch.Tensor(img.transpose(2,0,1))
         mask = torch.Tensor(mask.transpose(2,0,1))
@@ -128,10 +139,11 @@ class DeepGlobeRoadExtract(data.Dataset):
 
     def __len__(self):
         return len(self.img_paths)
-    
+
 
 if __name__ == '__main__':
     dataset = DeepGlobeRoadExtract()
+    print(dataset.__len__())
     for index, data in enumerate(dataset):
         print(data[0].size())
         print(data[1].size())
