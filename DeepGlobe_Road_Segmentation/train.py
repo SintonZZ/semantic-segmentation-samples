@@ -23,14 +23,38 @@ def get_args():
     return parser.parse_args()
 
 
-def train_one_batch(model, optimizer, criterion, img, mask):
+def train_one_epoch(train_loader, model, criterion, optimizer):
     model.train()
-    optimizer.zero_grad()
-    pred_mask = model(img)
-    loss = criterion(mask, pred_mask)
-    loss.backward()
-    optimizer.step()
-    return loss
+    tbar = tqdm(train_loader)
+    loss_sum_value = 0.0
+    for batch_idx, (img, mask) in enumerate(tbar):
+        img, mask = img.to(device), mask.to(device)
+        optimizer.zero_grad()
+        pred_mask = model(img)
+        loss = criterion(mask, pred_mask)
+        loss.backward()
+        optimizer.step()
+        loss_sum_value += loss.data.cpu()
+
+        tbar.set_description(
+            f"epoch: {epoch} / {total_epochs} step: {batch_idx} / {len(train_loader)} "
+            f"loss: {loss_sum_value / (batch_idx + 1):.6f}"
+        )
+    train_loss = loss_sum_value / (len(train_loader))
+    return train_loss
+
+
+def validate(valid_loader, model, criterion):
+    model.eval()
+    loss_sum_value = 0.0
+    for img, mask in tqdm(valid_loader):
+        img, mask = img.to(device), mask.to(device)
+        pred_mask = model(img)
+        loss = criterion(mask, pred_mask)
+        loss_sum_value += loss.data.cpu()
+
+    valid_loss = loss_sum_value / (len(valid_loader))
+    return valid_loss
 
 
 if __name__ == '__main__':
@@ -38,7 +62,7 @@ if __name__ == '__main__':
     device_ids = list(range(torch.cuda.device_count()))
 
     if args.arch == 'dlinknet34':
-        model = DinkNet34()
+        model = DinkNet34(num_classes=1)
     else:
         raise ValueError("Wrong architecture.")
     
@@ -61,54 +85,31 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=args.lr,
                                  betas=(0.9, 0.999))
-    
     # criterion
     criterion = dice_bce_loss()
-
     # lr scheduler
-    lr_scheduler = ReduceLROnPlateau(optimizer, 
-                                     mode='min',
-                                     factor=0.2,
-                                     patience=5,
-                                     verbose=True)
-
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, verbose=True)
     # dataset
     training_set = DeepGlobeRoadExtract(mode='train')
-    # valid_set = DeepGlobeRoadExtract(mode='valid')
-    train_loader = data.DataLoader(training_set,
-                                   batch_size=args.bs,
-                                   shuffle=True,
-                                   num_workers=4,
-                                   pin_memory=True)
+    valid_set = DeepGlobeRoadExtract(mode='valid')
+    train_loader = data.DataLoader(training_set, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+    valid_loader = data.DataLoader(valid_set, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
+    # training procedure
     total_epochs = args.epochs
     best_loss = 100.0
     for epoch in range(1, total_epochs + 1):
-        tbar = tqdm(train_loader)
-        curr_lr_value = args.lr
-        loss_sum_value = 0.0
-        for batch_idx, (img, mask) in enumerate(tbar):
-            img, mask = img.to(device), mask.to(device)
-            loss_vaule = train_one_batch(model, optimizer, criterion, img, mask)
-            loss_sum_value += loss_vaule.data.cpu()
+        train_loss = train_one_epoch(train_loader, model, criterion, optimizer)
+        valid_loss = validate(valid_loader, model, criterion)
+        for g in optimizer.param_groups:
+            curr_lr_value = g['lr']
 
-            for g in optimizer.param_groups:
-                curr_lr_value = g['lr']
-            
-            tbar.set_description(
-                f"Epoch: {epoch} / {total_epochs} Step: {batch_idx} / {len(train_loader)} "
-                f"Loss: {loss_sum_value / (batch_idx + 1):.6f} lr: {curr_lr_value:.6f}"
-            )
+        log(f"epoch: {epoch} - train loss: {train_loss:.6f} - valid loss: {valid_loss:.6f} - lr: {curr_lr_value:.6f}",
+            log_path=ckpt_path, log_name=log_name, print_info=True)
         
-        train_loss = loss_sum_value / (len(train_loader))
+        lr_scheduler.step(valid_loss)
 
-        log(f"Epoch: {epoch} Loss: {train_loss:.6f} lr: {curr_lr_value:.6f}",
-            log_path=ckpt_path, log_name=log_name, print_info=False)
-        
-        lr_scheduler.step(train_loss)
-
-        if train_loss < best_loss:
-            best_loss = train_loss
+        if valid_loss < best_loss:
+            best_loss = valid_loss
             torch.save(model.state_dict(), os.path.join(ckpt_path, f'{args.arch}_best.pth'))
 
     
-
