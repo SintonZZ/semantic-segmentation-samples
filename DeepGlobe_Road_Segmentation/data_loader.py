@@ -12,7 +12,7 @@ def randomHueSaturationValue(image, hue_shift_limit=(-180, 180),
     if np.random.random() < u:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(image)
-        hue_shift = np.random.randint(hue_shift_limit[0], hue_shift_limit[1]+1)
+        hue_shift = np.random.randint(hue_shift_limit[0], hue_shift_limit[1] + 1)
         hue_shift = np.uint8(hue_shift)
         h += hue_shift
         sat_shift = np.random.uniform(sat_shift_limit[0], sat_shift_limit[1])
@@ -20,15 +20,16 @@ def randomHueSaturationValue(image, hue_shift_limit=(-180, 180),
         val_shift = np.random.uniform(val_shift_limit[0], val_shift_limit[1])
         v = cv2.add(v, val_shift)
         image = cv2.merge((h, s, v))
-        #image = cv2.merge((s, v))
+        # image = cv2.merge((s, v))
         image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
 
     return image
 
+
 def randomShiftScaleRotate(image, mask,
                            shift_limit=(-0.0, 0.0),
                            scale_limit=(-0.0, 0.0),
-                           rotate_limit=(-0.0, 0.0), 
+                           rotate_limit=(-0.0, 0.0),
                            aspect_limit=(-0.0, 0.0),
                            borderMode=cv2.BORDER_CONSTANT, u=0.5):
     if np.random.random() < u:
@@ -64,12 +65,14 @@ def randomShiftScaleRotate(image, mask,
 
     return image, mask
 
+
 def randomHorizontalFlip(image, mask, u=0.5):
     if np.random.random() < u:
         image = cv2.flip(image, 1)
         mask = cv2.flip(mask, 1)
 
     return image, mask
+
 
 def randomVerticleFlip(image, mask, u=0.5):
     if np.random.random() < u:
@@ -78,10 +81,11 @@ def randomVerticleFlip(image, mask, u=0.5):
 
     return image, mask
 
+
 def randomRotate90(image, mask, u=0.5):
     if np.random.random() < u:
-        image=np.rot90(image)
-        mask=np.rot90(mask)
+        image = np.rot90(image)
+        mask = np.rot90(mask)
 
     return image, mask
 
@@ -89,18 +93,18 @@ def randomRotate90(image, mask, u=0.5):
 class DeepGlobeRoadExtract(data.Dataset):
     def __init__(self, mode='train'):
         super().__init__()
-        root_path = './dataset/train'
+        root_path = f'/home/xdzhang/project/semantic_segmentation/DeepGlobe_Road_Segmentation/dataset/train'
         self.img_paths = glob(os.path.join(root_path, '*sat.jpg'))
         self.img_paths = sorted(self.img_paths, key=lambda x: float(x.split('/')[-1][:-8]))
         dataset_size = len(self.img_paths)
         if mode == 'train':
             self.img_paths = self.img_paths[:round(dataset_size * 0.8)]
         elif mode == 'valid':
-            self.img_paths = self.img_paths[round(dataset_size * 0.8):round(dataset_size * 0.8) + round(dataset_size * 0.1)]
+            self.img_paths = self.img_paths[
+                             round(dataset_size * 0.8):round(dataset_size * 0.8) + round(dataset_size * 0.1)]
         else:
-            self.img_paths = self.img_paths[round(dataset_size * 0.1):]
+            self.img_paths = self.img_paths[-round(dataset_size * 0.1):]
 
-        
     def __getitem__(self, index):
         img_path = self.img_paths[index]
         mask_path = img_path.replace('sat.jpg', 'mask.png')
@@ -108,19 +112,19 @@ class DeepGlobeRoadExtract(data.Dataset):
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
         img = randomHueSaturationValue(img,
-                                   hue_shift_limit=(-30, 30),
-                                   sat_shift_limit=(-5, 5),
-                                   val_shift_limit=(-15, 15))
-    
+                                       hue_shift_limit=(-30, 30),
+                                       sat_shift_limit=(-5, 5),
+                                       val_shift_limit=(-15, 15))
+
         img, mask = randomShiftScaleRotate(img, mask,
-                                        shift_limit=(-0.1, 0.1),
-                                        scale_limit=(-0.1, 0.1),
-                                        aspect_limit=(-0.1, 0.1),
-                                        rotate_limit=(-0, 0))
+                                           shift_limit=(-0.1, 0.1),
+                                           scale_limit=(-0.1, 0.1),
+                                           aspect_limit=(-0.1, 0.1),
+                                           rotate_limit=(-0, 0))
         img, mask = randomHorizontalFlip(img, mask)
         img, mask = randomVerticleFlip(img, mask)
         img, mask = randomRotate90(img, mask)
-        
+
         # cv2.namedWindow('mask', 0)
         # cv2.imshow('mask', mask)
         # cv2.namedWindow('img', 0)
@@ -133,8 +137,8 @@ class DeepGlobeRoadExtract(data.Dataset):
         mask[mask > 0.5] = 1
         mask[mask <= 0.5] = 0
 
-        img = torch.Tensor(img.transpose(2,0,1))
-        mask = torch.Tensor(mask.transpose(2,0,1))
+        img = torch.Tensor(img.transpose(2, 0, 1))
+        mask = torch.Tensor(mask.transpose(2, 0, 1))
         return img, mask
 
     def __len__(self):
@@ -150,4 +154,3 @@ if __name__ == '__main__':
         print(data[1].max())
         if index > 5:
             break
-
