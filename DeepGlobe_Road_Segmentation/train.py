@@ -67,7 +67,7 @@ if __name__ == '__main__':
         raise ValueError("Wrong architecture.")
     
     device = torch.device('cuda:0')
-    model = DataParallel(model, device_ids=device_ids[:4]).to(device)
+    model = DataParallel(model, device_ids=device_ids[:2]).to(device)
     
     ckpt_path = f'./checkpoint/{args.arch}_{args.flag}'
     if not os.path.exists(ckpt_path):
